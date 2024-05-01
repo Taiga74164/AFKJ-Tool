@@ -1,0 +1,1 @@
+# AFKJ-Tool
