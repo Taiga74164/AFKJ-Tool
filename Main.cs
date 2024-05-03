@@ -26,6 +26,8 @@ namespace AFK_Mod
         private string _findTxt = "pbsc_avatar_female_main_lod1";
         private string _findLayerTxt = "Player";
         private string _objectsOfTypeTxt = "IGameCollisionBody";
+        private bool _startLogging;
+        private GameObject _mapPlayer;
 
         public override void OnInitializeMelon()
         {
@@ -41,6 +43,18 @@ namespace AFK_Mod
 
         public override void OnUpdate()
         {
+            if (_startLogging)
+            {
+                if (!_mapPlayer)
+                    _mapPlayer = GameObject.Find("mapscene/object_layer/map_player");
+
+                if (_mapPlayer)
+                {
+                    var colBody = _mapPlayer.GetComponent<IGameCollisionBody>();
+                    // colBody.CurrentPosXZ() is the transform.position.x/z of map_player
+                    MelonLogger.Msg($"Movement: {colBody.movement}, CurrentPosXZ: {colBody.CurrentPosXZ()}");
+                }
+            }
         }
         
         public override void OnGUI()
@@ -48,7 +62,7 @@ namespace AFK_Mod
             GUI.Box(new Rect(5, 5, 400, 700), "AFK Journey Mod");
             
             GUILayout.BeginArea(new Rect(10, 40, 380, 700));
-            _menuScrollPosition = GUILayout.BeginScrollView(_menuScrollPosition, GUILayout.Height(700));
+            _menuScrollPosition = GUILayout.BeginScrollView(_menuScrollPosition);
 
             if (GUILayout.Button("Log Scene Hierarchy"))
             {
@@ -66,6 +80,12 @@ namespace AFK_Mod
                 var sceneName = SceneManager.GetActiveScene().name;
                 LogAndDraw($"<b>Scene Name:</b> {sceneName}");
 
+            }
+
+            if (GUILayout.Button("Log DontDestroyOnLoad Objects"))
+            {
+                _logBuilder.Clear();
+                LogDontDestroyOnLoadObjects();
             }
 
             GUILayout.Label("Find:");
@@ -194,11 +214,22 @@ namespace AFK_Mod
 
                 foreach (var obj in objectsOfType)
                 {
-                    LogAndDraw(obj.name);
+                    var gameObj = obj as GameObject;
+                    if (gameObj != null)
+                    {
+                        var path = GetPathToRoot(gameObj);
+                        LogAndDraw(path);
+                    }
+                    else
+                    {
+                        LogAndDraw(obj.ToString());
+                    }
                 }
             }
 
-            GUILayout.BeginArea(new Rect(10, 320, 400, 800));
+            _startLogging = GUILayout.Toggle(_startLogging, "Start Logging");
+
+            GUILayout.BeginArea(new Rect(10, 360, 400, 800));
             GUILayout.Label(_logBuilder.ToString());
             GUILayout.EndArea();
 
@@ -252,6 +283,32 @@ namespace AFK_Mod
             }
 
             return objectsOnLayer;
+        }
+
+        private void LogDontDestroyOnLoadObjects()
+        {
+            var dontDestroyOnLoadObjects = GetDontDestroyOnLoadObjects();
+            if (dontDestroyOnLoadObjects.Length == 0)
+            {
+                LogAndDraw("No objects found in DontDestroyOnLoad scene.");
+                return;
+            }
+
+            foreach (var obj in dontDestroyOnLoadObjects)
+            {
+                LogAndDraw($"<b>{obj.name}</b> - Path: {GetPathToRoot(obj)}");
+                LogChildObjects(obj.transform, 1);
+            }
+        }
+
+        private GameObject[] GetDontDestroyOnLoadObjects()
+        {
+            var tempGO = new GameObject("TempGO");
+            Object.DontDestroyOnLoad(tempGO);
+            Scene dontDestroyOnLoadScene = tempGO.scene;
+            GameObject.DestroyImmediate(tempGO);
+
+            return dontDestroyOnLoadScene.GetRootGameObjects();
         }
 
         //[HarmonyPatch(typeof(LuaBehaviour))]
